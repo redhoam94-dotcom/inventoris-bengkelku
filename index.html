@@ -179,8 +179,10 @@ td{padding:9px 12px;border-top:1px solid var(--line);vertical-align:top}
 .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .toolbar .grow{flex:1;min-width:180px}
 
-input[type=file]{font:inherit;width:100%;padding:8px;border:1px dashed var(--line);border-radius:10px;background:var(--surface2);color:var(--ink)}
-input[type=file]::file-selector-button{font:inherit;font-weight:600;margin-right:12px;padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.demo{display:flex;justify-content:space-between;align-items:center;gap:6px 16px;flex-wrap:wrap;padding-bottom:10px;font-size:13px;color:var(--muted)}
+.demo b{color:var(--ink)}
+.demo .chips{gap:6px}
+.demo .chip{min-height:30px;padding:3px 12px;font-size:12px}
 .banner{border-radius:12px;padding:12px 16px;font-size:14px}
 .skel{height:92px;border-radius:12px;background:var(--surface);border:1px solid var(--line);animation:pulse 1.4s ease-in-out infinite}
 @keyframes pulse{50%{opacity:.55}}
@@ -191,6 +193,7 @@ input[type=file]::file-selector-button{font:inherit;font-weight:600;margin-right
 
 <div class="app">
   <header class="top">
+    <div class="demo"><span><b>Mode demo</b> · data contoh, hanya ada di halaman ini</span><span class="chips"><button class="chip" data-act="time" data-v="30">Maju 30 menit</button><button class="chip" data-act="time" data-v="120">Maju 2 jam</button><button class="chip" data-act="reset">Atur ulang</button></span></div>
     <div class="top-in">
       <div class="brand">
         <span class="mark" aria-hidden="true">
@@ -213,6 +216,7 @@ input[type=file]::file-selector-button{font:inherit;font-weight:600;margin-right
 var $=function(s){return document.querySelector(s)};
 var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
 var MIN=60000,HR=3600000,THRESH=70,MAXS=100;
+var OFFSET=0;function NOW(){return Date.now()+OFFSET}
 var TABS=[['dasbor','Dasbor'],['alat','Alat'],['pinjam','Pinjam'],['kembali','Kembali'],['siswa','Siswa & skor'],['data','Data']];
 var S={tools:[],students:[],loans:[],adj:[],v:0};
 var ui={loaded:{},canWrite:true,db:null,dl:null,tab:'dasbor',pickTool:'',pickStudent:'',dur:'2',filter:'all',q:'',cond:{},qrOpen:{},dataTab:'alat',dq:'',lastMsg:null,timeout:false,busy:false,pending:false,nodb:false,err:''};
@@ -250,9 +254,9 @@ function deltaFor(l,cond,at){
 }
 var cache={k:'',m:null};
 function scores(){
-  var key=S.v+':'+Math.floor(Date.now()/MIN);
+  var key=S.v+':'+Math.floor(NOW()/MIN);
   if(cache.k===key)return cache.m;
-  var m={},evs=[],now=Date.now();
+  var m={},evs=[],now=NOW();
   S.students.forEach(function(s){m[s.nis]={score:MAXS,events:[],loans:0,late:0,bad:0}});
   S.loans.forEach(function(l){
     var e=m[l.nis];if(!e)return;e.loans++;
@@ -479,156 +483,29 @@ function dataTable(now){
 }
 function vData(now){
   var t=[['alat','Alat'],['siswa','Siswa'],['pinjam','Peminjaman'],['skor','Riwayat skor']];
-  var h=head('Data','Semua catatan tersimpan sebagai tabel dan dibagikan ke setiap orang yang membuka halaman ini. Unduh sebagai CSV untuk dibuka di Excel atau Google Sheets.',
-    '<button class="btn" data-act="export"'+(ui.dl?'':' disabled')+'>Unduh CSV</button>');
+  var h=head('Data','Tabel di balik aplikasi, seperti lembar kerja di Google Sheets. Pada demo ini tabel hanya untuk dilihat.');
   h+='<div class="chips" role="group" aria-label="Tabel data">'+t.map(function(x){return '<button class="chip" data-act="dtab" data-v="'+x[0]+'" aria-pressed="'+(ui.dataTab===x[0])+'">'+x[1]+'</button>'}).join('')+'</div>';
   h+='<div class="toolbar"><div class="grow"><label class="f" for="q-data" style="position:absolute;left:-9999px">Cari di tabel</label><input type="search" id="q-data" data-keep="1" placeholder="Cari di tabel ini" value="'+esc(ui.dq)+'" autocomplete="off"></div></div>';
   h+='<div id="data-list" style="display:flex;flex-direction:column;gap:10px">'+dataTable(now)+'</div>';
-  h+=importCard();
   return h;
-}
-
-/* ---------- impor CSV ---------- */
-function normKey(s){return String(s==null?'':s).toLowerCase().replace(/[^a-z0-9]/g,'')}
-function parseCSV(text){
-  text=String(text).replace(/^﻿/,'');
-  var firstLine=text.split(/\r?\n/)[0]||'';
-  var delim=firstLine.split(';').length>firstLine.split(',').length?';':',';
-  var rows=[],row=[],cur='',q=false;
-  for(var i=0;i<text.length;i++){
-    var c=text[i];
-    if(q){
-      if(c==='"'){if(text[i+1]==='"'){cur+='"';i++}else q=false}
-      else cur+=c;
-    }else if(c==='"')q=true;
-    else if(c===delim){row.push(cur);cur=''}
-    else if(c==='\n'||c==='\r'){if(c==='\r'&&text[i+1]==='\n')i++;row.push(cur);rows.push(row);row=[];cur=''}
-    else cur+=c;
-  }
-  if(cur!==''||row.length){row.push(cur);rows.push(row)}
-  return rows.filter(function(r){return r.some(function(x){return String(x).trim()!==''})});
-}
-function buildImport(table,rows){
-  if(rows.length-1>300)return{error:'Maksimal 300 baris per impor. File ini berisi '+(rows.length-1)+' baris.'};
-  var hdr=rows[0].map(normKey);
-  var idx=function(names){for(var i=0;i<names.length;i++){var j=hdr.indexOf(names[i]);if(j>-1)return j}return -1};
-  var cell=function(r,i){return i<0?null:String(r[i]==null?'':r[i]).trim().replace(/^'(?=[=+\-@])/,'')};
-  var items=[],seen={};
-  if(table==='alat'){
-    var iC=idx(['kode']),iN=idx(['nama','namaalat']),iK=idx(['kategori']),iM=idx(['alatmahal','mahal','premium']),iD=idx(['kondisi']);
-    if(iC<0||iN<0)return{error:'Baris pertama harus berisi kolom Kode dan Nama. Unduh templat untuk contoh formatnya.'};
-    rows.slice(1).forEach(function(r,n){
-      var code=(cell(r,iC)||'').toUpperCase().slice(0,12),name=(cell(r,iN)||'').slice(0,40),id=code.toLowerCase().replace(/[^a-z0-9-]/g,'');
-      var it={line:n+2,key:id,id:code||'-',name:name,kind:'skip',msg:''};
-      var ex=S.tools.find(function(t){return t.id===id});
-      var cond=iD>-1?(cell(r,iD)||'').toLowerCase():'';
-      var mv=iM>-1?(cell(r,iM)||'').toLowerCase():'';
-      if(!id||!name)it.msg='Kode atau nama kosong';
-      else if(seen[id])it.msg='Kode ganda di dalam file';
-      else if(cond&&!COND[cond])it.msg='Kondisi harus Baik, Rusak, atau Hilang';
-      else if(mv&&!/^(ya|y|yes|true|1|tidak|t|no|false|0)$/.test(mv))it.msg='Alat mahal harus Ya atau Tidak';
-      else{
-        seen[id]=1;
-        var prem=mv?/^(ya|y|yes|true|1)$/.test(mv):(ex?!!ex.premium:false);
-        it.data={code:code,name:name,category:(iK>-1&&cell(r,iK))?cell(r,iK).slice(0,30):(ex?ex.category||'':''),premium:prem,condition:cond||(ex&&ex.condition)||'baik'};
-        it.kind=ex?'update':'new';
-      }
-      items.push(it);
-    });
-  }else{
-    var iS=idx(['nis']),iN2=idx(['nama','namalengkap']),iL=idx(['kelas']),iW=idx(['whatsapp','wa','nomorwa','nomorwhatsapp','hp']);
-    if(iS<0||iN2<0)return{error:'Baris pertama harus berisi kolom NIS dan Nama. Unduh templat untuk contoh formatnya.'};
-    rows.slice(1).forEach(function(r,n){
-      var nis=(cell(r,iS)||'').replace(/[^A-Za-z0-9_-]/g,'').slice(0,20),name=(cell(r,iN2)||'').slice(0,60);
-      var it={line:n+2,key:nis,id:nis||'-',name:name,kind:'skip',msg:''};
-      var ex=S.students.find(function(s){return s.nis===nis});
-      if(!nis||!name)it.msg='NIS atau nama kosong';
-      else if(seen[nis])it.msg='NIS ganda di dalam file';
-      else{
-        seen[nis]=1;
-        it.data={nis:nis,name:name,kelas:(iL>-1&&cell(r,iL))?cell(r,iL).slice(0,20):(ex?ex.kelas||'':''),wa:(iW>-1&&cell(r,iW))?cell(r,iW).slice(0,20):(ex?ex.wa||'':'')};
-        it.kind=ex?'update':'new';
-      }
-      items.push(it);
-    });
-  }
-  return{items:items};
-}
-function impPreview(){
-  var m=ui.imp;if(!m)return '';
-  if(m.error)return '<div class="banner tone-bad" role="alert">'+esc(m.error)+'</div>';
-  var nNew=0,nUp=0,nSkip=0;
-  m.items.forEach(function(i){if(i.kind==='new')nNew++;else if(i.kind==='update')nUp++;else nSkip++});
-  var shown=m.items.slice(0,50),n=nNew+nUp;
-  var label=m.table==='alat'?'Kode':'NIS';
-  var h='<div class="banner tone-ink"><b>'+esc(m.name)+'</b>: '+nNew+' baru, '+nUp+' diperbarui, '+nSkip+' dilewati.</div>';
-  h+='<div class="tw" style="max-height:320px"><table><thead><tr><th>Baris</th><th>'+label+'</th><th>Nama</th><th>Hasil</th></tr></thead><tbody>'+shown.map(function(i){
-    var r=i.kind==='new'?'<span class="pill tone-ok">Baru</span>':i.kind==='update'?'<span class="pill tone-warn">Perbarui</span>':'<span class="pill tone-bad">Dilewati</span> '+esc(i.msg);
-    return '<tr><td>'+i.line+'</td><td class="code">'+esc(i.id)+'</td><td>'+esc(i.name)+'</td><td>'+r+'</td></tr>';
-  }).join('')+'</tbody></table></div>';
-  if(m.items.length>50)h+='<p class="muted" style="font-size:13px">Menampilkan 50 dari '+m.items.length+' baris. Semua baris valid tetap diimpor.</p>';
-  if(ui.busy&&ui.impProg)h+='<div class="banner tone-warn" role="status">'+esc(ui.impProg)+'</div>';
-  h+='<div class="chips"><button class="btn primary" data-act="imp-run"'+((n&&ui.canWrite&&!ui.busy)?'':' disabled')+'>Impor '+n+' baris</button><button class="btn" data-act="imp-clear"'+(ui.busy?' disabled':'')+'>Batal</button></div>';
-  return h;
-}
-function refreshImp(){var b=$('#imp-box');if(b)b.innerHTML=impPreview()}
-function importCard(){
-  var t=ui.dataTab;
-  if(t!=='alat'&&t!=='siswa')return '<section class="card"><h2>Impor CSV</h2><p class="muted" style="margin-top:6px">Impor tersedia untuk tabel Alat dan Siswa. Data peminjaman dan riwayat skor dihitung otomatis dari aktivitas di aplikasi, jadi tidak diimpor.</p></section>';
-  var cols=t==='alat'?'Kode, Nama, Kategori, Alat mahal (Ya/Tidak), Kondisi (Baik/Rusak/Hilang)':'NIS, Nama, Kelas, WhatsApp';
-  var extra=t==='alat'?'Kolom Status boleh ada tetapi diabaikan, karena status dihitung dari data peminjaman. Kode yang sudah ada akan diperbarui.':'NIS yang sudah ada akan diperbarui. Skor siswa tidak berubah.';
-  return '<section class="card"><div class="card-h"><h2>Impor dari CSV</h2><button class="btn sm" data-act="tpl"'+(ui.dl?'':' disabled')+'>Unduh templat</button></div>'
-    +'<p class="muted" style="font-size:14px;margin-bottom:12px">Kolom: '+cols+'. '+extra+' Pemisah koma atau titik koma, maksimal 300 baris.</p>'
-    +'<div style="margin-bottom:12px"><label class="f" for="f-csv">Pilih file CSV</label><input type="file" id="f-csv" accept=".csv,text/csv"'+(ui.canWrite?'':' disabled')+'></div>'
-    +'<div id="imp-box" style="display:flex;flex-direction:column;gap:12px">'+impPreview()+'</div></section>';
-}
-async function onFile(f){
-  if(!f)return;
-  if(f.size>1048576){ui.imp={error:'File terlalu besar. Batas 1 MB.'};refreshImp();return}
-  try{
-    var rows=parseCSV(await f.text());
-    if(rows.length<2)ui.imp={error:'File kosong atau hanya berisi baris header.'};
-    else ui.imp=Object.assign({table:ui.dataTab,name:f.name},buildImport(ui.dataTab,rows));
-  }catch(e){ui.imp={error:'File tidak bisa dibaca. Pastikan formatnya CSV.'}}
-  refreshImp();
-}
-async function runImport(){
-  var m=ui.imp;if(!m||!m.items||!ui.db||ui.busy)return;
-  var todo=m.items.filter(function(i){return i.data}),coll=m.table==='alat'?'tools':'students',ok=0,fail='';
-  ui.busy=true;ui.impProg='Mengimpor 0 dari '+todo.length+'…';refreshImp();
-  for(var i=0;i<todo.length;i++){
-    try{await ui.db.collection(coll).doc(todo[i].key).set(todo[i].data);ok++;ui.impProg='Mengimpor '+ok+' dari '+todo.length+'…';refreshImp()}
-    catch(e){fail=emsg(e);break}
-  }
-  ui.busy=false;ui.impProg='';
-  if(fail){toast(ok+' baris masuk, lalu berhenti: '+fail,true);refreshImp()}
-  else{ui.imp=null;toast(ok+' baris berhasil diimpor');renderAll()}
-}
-async function doTemplate(){
-  if(!ui.dl)return;
-  var alat=ui.dataTab==='alat';
-  var text=alat?'Kode,Nama,Kategori,Alat mahal,Kondisi\r\nMM-05,Multimeter,Alat ukur,Ya,Baik\r\nTC-05,Tang Crimping,Alat jaringan,Tidak,Baik\r\n':'NIS,Nama,Kelas,WhatsApp\r\n2024009,Contoh Siswa,XI TKJ 1,6281200000009\r\n';
-  try{await ui.dl.save({filename:alat?'templat-alat.csv':'templat-siswa.csv',data:text});toast('Templat disimpan')}
-  catch(e){if(!e||e.code!=='declined')toast('File tidak bisa disimpan di tampilan ini',true)}
 }
 
 /* ---------- render ---------- */
-function ready(){return ui.loaded.tools&&ui.loaded.students&&ui.loaded.loans}
+function ready(){return true}
 function renderNav(){
-  var now=Date.now(),od=S.loans.filter(function(l){return !l.returnedAt&&now>l.dueAt}).length,act=S.loans.filter(function(l){return !l.returnedAt}).length;
+  var now=NOW(),od=S.loans.filter(function(l){return !l.returnedAt&&now>l.dueAt}).length,act=S.loans.filter(function(l){return !l.returnedAt}).length;
   $('#nav').innerHTML=TABS.map(function(t){
     var b=t[0]==='kembali'&&ready()&&act?'<span class="badge'+(od?'':' soft')+'">'+(od||act)+'</span>':'';
     return '<button class="tab" data-act="nav" data-to="'+t[0]+'"'+(ui.tab===t[0]?' aria-current="page"':'')+'>'+t[1]+b+'</button>';
   }).join('');
 }
 function renderClock(){
-  var d=new Date(),days=['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
-  $('#clock').innerHTML='<b>'+fT(d.getTime())+'</b>'+days[d.getDay()]+', '+fD(d.getTime());
+  var d=new Date(NOW()),days=['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+  $('#clock').innerHTML='<b>'+fT(d.getTime())+'</b>'+days[d.getDay()]+', '+fD(d.getTime())+(OFFSET?' · demo +'+fDur(OFFSET/MIN):'');
 }
 function renderView(){
-  var now=Date.now(),h='';
-  if(ui.nodb)h='<div class="banner tone-warn" role="alert">Penyimpanan data tidak tersedia di tampilan ini. Buka halaman ini langsung di Claude agar data peminjaman bisa dimuat.</div>';
-  else if(!ready()){
+  var now=NOW(),h='';
+  if(!ready()){
     h=head('Memuat data','Mengambil catatan alat, siswa, dan peminjaman.')+'<div class="skel"></div><div class="skel"></div><div class="skel"></div>';
     if(ui.timeout)h+='<div class="banner tone-warn" role="status">Data belum bisa dijangkau. Periksa koneksi internet; halaman akan terisi sendiri begitu data tiba.</div>';
     if(ui.err)h+='<div class="banner tone-bad" role="alert">Data tidak bisa dibaca ('+esc(ui.err)+').</div>';
@@ -656,63 +533,44 @@ var emsg=function(e){return e&&e.code==='invalid_argument'?'Anda tidak punya izi
 
 /* ---------- actions ---------- */
 function go(tab){
-  if(location.hash==='#'+tab){ui.tab=tab;renderAll();window.scrollTo(0,0)}else location.hash=tab;
+  if(ui.tab==='pinjam'&&tab!=='pinjam')ui.lastMsg=null;
+  ui.tab=tab;renderAll();window.scrollTo(0,0);
+  try{if(location.hash!=='#'+tab)location.hash=tab}catch(e){}
 }
-async function doBorrow(){
-  var now=Date.now(),t=S.tools.find(function(x){return x.id===ui.pickTool}),s=S.students.find(function(x){return x.nis===ui.pickStudent});
-  var el=eligibility(s,t,now);if(!el.ok||ui.busy||!ui.db)return;
-  var due=dueFor(now);ui.busy=true;renderView();
-  try{
-    await ui.db.collection('loans').add({toolId:t.id,toolCode:t.code,toolName:t.name,nis:s.nis,studentName:s.name,borrowedAt:now,dueAt:due,returnedAt:null,condition:null});
-    ui.lastMsg={code:t.code,at:now,dueAt:due,
-      text:t.name+' No. '+toolNo(t.code)+' berhasil dipinjam atas nama '+first(s.name)+', wajib kembali jam '+fT(due)+'.',
-      remind:first(s.name)+', 30 menit lagi '+t.name+' harus kembali. Kalau telat, skor kamu turun.'};
-    ui.pickTool='';toast('Peminjaman dicatat');
-  }catch(e){toast('Gagal mencatat: '+emsg(e),true)}
-  ui.busy=false;renderAll();
+var seq=100;function newId(p){return p+(++seq)}
+function commit(msg){S.v++;if(msg)toast(msg);renderAll()}
+function doBorrow(){
+  var now=NOW(),t=S.tools.find(function(x){return x.id===ui.pickTool}),s=S.students.find(function(x){return x.nis===ui.pickStudent});
+  var el=eligibility(s,t,now);if(!el.ok)return;
+  var due=dueFor(now);
+  S.loans.push({id:newId('l'),toolId:t.id,toolCode:t.code,toolName:t.name,nis:s.nis,studentName:s.name,borrowedAt:now,dueAt:due,returnedAt:null,condition:null});
+  ui.lastMsg={code:t.code,at:now,dueAt:due,
+    text:t.name+' No. '+toolNo(t.code)+' berhasil dipinjam atas nama '+first(s.name)+', wajib kembali jam '+fT(due)+'.',
+    remind:first(s.name)+', 30 menit lagi '+t.name+' harus kembali. Kalau telat, skor kamu turun.'};
+  ui.pickTool='';commit('Peminjaman dicatat');
 }
-async function doReturn(id){
-  var l=S.loans.find(function(x){return x.id===id});if(!l||l.returnedAt||ui.busy||!ui.db)return;
-  var c=ui.cond[id]||'baik',now=Date.now();ui.busy=true;
-  try{
-    await ui.db.collection('loans').doc(id).update({returnedAt:now,condition:c});
-    if(c!=='baik')await ui.db.collection('tools').doc(l.toolId).update({condition:c});
-    delete ui.cond[id];toast(l.toolName+' '+l.toolCode+' diterima kembali');
-  }catch(e){toast('Gagal menyimpan: '+emsg(e),true)}
-  ui.busy=false;renderAll();
+function doReturn(id){
+  var l=S.loans.find(function(x){return x.id===id});if(!l||l.returnedAt)return;
+  var c=ui.cond[id]||'baik';l.returnedAt=NOW();l.condition=c;
+  if(c!=='baik'){var t=S.tools.find(function(x){return x.id===l.toolId});if(t)t.condition=c}
+  delete ui.cond[id];commit(l.toolName+' '+l.toolCode+' diterima kembali');
 }
-async function doRepair(id){
-  try{await ui.db.collection('tools').doc(id).update({condition:'baik'});toast('Alat ditandai sudah baik')}catch(e){toast('Gagal menyimpan: '+emsg(e),true)}
-}
-async function doRecover(nis){
-  try{await ui.db.collection('adjustments').add({nis:nis,points:10,reason:'Tugas pemulihan: membantu beres-beres bengkel',at:Date.now()});toast('Skor bertambah 10 poin')}catch(e){toast('Gagal menyimpan: '+emsg(e),true)}
-}
-async function addTool(f){
+function doRepair(id){var t=S.tools.find(function(x){return x.id===id});if(t){t.condition='baik';commit('Alat ditandai sudah baik')}}
+function doRecover(nis){S.adj.push({id:newId('a'),nis:nis,points:10,reason:'Tugas pemulihan: membantu beres-beres bengkel',at:NOW()});commit('Skor bertambah 10 poin')}
+function addTool(f){
   var code=f.querySelector('#nt-code').value.trim().toUpperCase(),name=f.querySelector('#nt-name').value.trim();
   var id=code.toLowerCase().replace(/[^a-z0-9-]/g,'');
   if(!id||!name){toast('Isi kode dan nama alat',true);return}
   if(S.tools.some(function(t){return t.id===id})){toast('Kode '+code+' sudah dipakai',true);return}
-  try{
-    await ui.db.collection('tools').doc(id).set({code:code,name:name,category:f.querySelector('#nt-cat').value.trim(),premium:f.querySelector('#nt-prem').checked,condition:'baik'});
-    toast('Alat '+code+' ditambahkan');f.reset();
-  }catch(e){toast('Gagal menyimpan: '+emsg(e),true)}
+  S.tools.push({id:id,code:code,name:name,category:f.querySelector('#nt-cat').value.trim(),premium:f.querySelector('#nt-prem').checked,condition:'baik'});
+  commit('Alat '+code+' ditambahkan');
 }
-async function addStudent(f){
+function addStudent(f){
   var nis=f.querySelector('#ns-nis').value.trim().replace(/[^A-Za-z0-9_-]/g,''),name=f.querySelector('#ns-name').value.trim();
   if(!nis||!name){toast('Isi NIS dan nama siswa',true);return}
   if(S.students.some(function(s){return s.nis===nis})){toast('NIS '+nis+' sudah terdaftar',true);return}
-  try{
-    await ui.db.collection('students').doc(nis).set({nis:nis,name:name,kelas:f.querySelector('#ns-kelas').value.trim(),wa:f.querySelector('#ns-wa').value.trim()});
-    toast(first(name)+' terdaftar dengan skor '+MAXS);f.reset();
-  }catch(e){toast('Gagal menyimpan: '+emsg(e),true)}
-}
-var csvCell=function(c){if(typeof c==='string'&&/^[=+\-@\t\r]/.test(c))c="'"+c;c=String(c==null?'':c);return /[",\n;]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c};
-async function doExport(){
-  if(!ui.dl)return;
-  var d=dataset(ui.dataTab,Date.now());
-  var text='﻿'+[d.head].concat(d.rows).map(function(r){return r.map(csvCell).join(',')}).join('\r\n');
-  try{await ui.dl.save({filename:'bengkel-'+ui.dataTab+'.csv',data:text});toast('File CSV disimpan')}
-  catch(e){if(!e||e.code!=='declined')toast('File tidak bisa disimpan di tampilan ini',true)}
+  S.students.push({id:nis,nis:nis,name:name,kelas:f.querySelector('#ns-kelas').value.trim(),wa:f.querySelector('#ns-wa').value.trim()});
+  commit(first(name)+' terdaftar dengan skor '+MAXS);
 }
 
 document.addEventListener('click',function(e){
@@ -733,25 +591,21 @@ document.addEventListener('click',function(e){
     var card=b.closest('article');
     card.querySelectorAll('[data-act="cond"]').forEach(function(x){x.setAttribute('aria-pressed',String(x.dataset.v===v))});
     var l=S.loans.find(function(x){return x.id===id});
-    if(l){var p=card.querySelector('#pred-'+CSS.escape(id));if(p)p.innerHTML=predText(l,v,Date.now())}
+    if(l){var p=card.querySelector('#pred-'+CSS.escape(id));if(p)p.innerHTML=predText(l,v,NOW())}
   }
-  else if(a==='dtab'){ui.dataTab=v;ui.dq='';ui.imp=null;renderView()}
-  else if(a==='export')doExport();
-  else if(a==='tpl')doTemplate();
-  else if(a==='imp-run')runImport();
-  else if(a==='imp-clear'){ui.imp=null;var fi=$('#f-csv');if(fi)fi.value='';refreshImp()}
+  else if(a==='dtab'){ui.dataTab=v;ui.dq='';renderView()}
+  else if(a==='time'){var mm=parseInt(v,10);OFFSET+=mm*MIN;S.v++;renderAll();toast('Waktu demo maju '+fDur(mm))}
+  else if(a==='reset'){OFFSET=0;ui.cond={};ui.qrOpen={};ui.lastMsg=null;ui.pickTool='';ui.pickStudent='';ui.q='';ui.filter='all';seed();renderAll();toast('Demo diatur ulang')}
 });
 document.addEventListener('change',function(e){
   if(e.target.id==='f-stu'){ui.pickStudent=e.target.value;renderView()}
-  else if(e.target.id==='f-csv')onFile(e.target.files&&e.target.files[0]);
 });
 document.addEventListener('input',function(e){
-  if(e.target.id==='q-alat'){ui.q=e.target.value;$('#alat-list').innerHTML=alatList(Date.now())}
-  else if(e.target.id==='q-data'){ui.dq=e.target.value;$('#data-list').innerHTML=dataTable(Date.now())}
+  if(e.target.id==='q-alat'){ui.q=e.target.value;$('#alat-list').innerHTML=alatList(NOW())}
+  else if(e.target.id==='q-data'){ui.dq=e.target.value;$('#data-list').innerHTML=dataTable(NOW())}
 });
 document.addEventListener('submit',function(e){
   e.preventDefault();
-  if(!ui.db||!ui.canWrite)return;
   if(e.target.id==='f-tool-new')addTool(e.target);
   else if(e.target.id==='f-stu-new')addStudent(e.target);
 });
@@ -761,30 +615,36 @@ function readHash(){
   if(ui.tab==='pinjam'&&t!=='pinjam')ui.lastMsg=null;
   ui.tab=t;
 }
-window.addEventListener('hashchange',function(){readHash();renderAll();window.scrollTo(0,0)});
+window.addEventListener('hashchange',function(){var p=ui.tab;readHash();if(ui.tab!==p){renderAll();window.scrollTo(0,0)}});
+
+/* ---------- data contoh (demo) ---------- */
+function seed(){
+  var b=NOW(),H=HR,D=24*HR;
+  var TL=[['mm-01','MM-01','Multimeter','Alat ukur',1,'baik'],['mm-02','MM-02','Multimeter','Alat ukur',1,'baik'],['mm-03','MM-03','Multimeter','Alat ukur',1,'baik'],['mm-04','MM-04','Multimeter','Alat ukur',1,'baik'],
+    ['tc-01','TC-01','Tang Crimping','Alat jaringan',0,'baik'],['tc-02','TC-02','Tang Crimping','Alat jaringan',0,'baik'],['tc-03','TC-03','Tang Crimping','Alat jaringan',0,'baik'],['tc-04','TC-04','Tang Crimping','Alat jaringan',0,'rusak'],
+    ['lp-01','LP-01','Laptop','Perangkat',1,'baik'],['lp-02','LP-02','Laptop','Perangkat',1,'baik'],['lp-03','LP-03','Laptop','Perangkat',1,'baik'],
+    ['lt-01','LT-01','LAN Tester','Alat jaringan',0,'baik'],['ob-01','OB-01','Set Obeng Presisi','Alat tangan',0,'baik'],['sl-01','SL-01','Solder Station','Alat tangan',0,'baik']];
+  S.tools=TL.map(function(a){return{id:a[0],code:a[1],name:a[2],category:a[3],premium:!!a[4],condition:a[5]}});
+  var NL=[['2024001','Andi Pratama'],['2024002','Siti Rahma'],['2024003','Budi Santoso'],['2024004','Dewi Lestari'],['2024005','Rafi Hidayat'],['2024006','Nadia Putri'],['2024007','Joko Saputra'],['2024008','Maya Sari']];
+  S.students=NL.map(function(a,i){return{id:a[0],nis:a[0],name:a[1],kelas:i%2?'XI TKJ 2':'XI TKJ 1',wa:'62812000000'+pad(i+1)}});
+  S.loans=[];var n=0;
+  function L(tool,nis,ago,durH,retMin,cond){
+    n++;var t=S.tools.find(function(x){return x.id===tool}),st=S.students.find(function(x){return x.nis===nis});
+    var bor=b-ago,due=bor+durH*H;
+    S.loans.push({id:'l'+n,toolId:tool,toolCode:t.code,toolName:t.name,nis:nis,studentName:st.name,borrowedAt:bor,dueAt:due,returnedAt:retMin==null?null:due+retMin*MIN,condition:retMin==null?null:cond});
+  }
+  L('tc-01','2024003',12*D,2,150,'baik');L('tc-04','2024003',9*D,2,-10,'rusak');L('tc-02','2024003',6*D,1,-5,'baik');L('lt-01','2024003',3*D,1,-20,'baik');
+  L('mm-01','2024005',10*D,2,80,'baik');L('lp-01','2024005',4*D,3,180,'baik');L('lp-03','2024004',8*D,2,-15,'baik');
+  L('mm-02','2024006',7*D,2,70,'baik');L('tc-03','2024006',2*D,1,-10,'baik');L('mm-04','2024007',11*D,2,-5,'rusak');
+  L('ob-01','2024001',5*D,1,-30,'baik');L('mm-01','2024002',3*D,2,-12,'baik');L('lp-02','2024008',6*D,3,-40,'baik');
+  L('mm-03','2024005',4.5*H,3);L('lp-02','2024001',195*MIN,2);L('tc-02','2024002',60*MIN,3);L('mm-02','2024004',45*MIN,2);
+  var R='Tugas pemulihan: membantu beres-beres bengkel';
+  S.adj=[{id:'a1',nis:'2024003',points:10,reason:R,at:b-2*D},{id:'a2',nis:'2024007',points:10,reason:R,at:b-5*D},{id:'a3',nis:'2024007',points:10,reason:R,at:b-D}];
+  S.v++;
+}
 
 /* ---------- boot ---------- */
-function sub(name,key){
-  return ui.db.collection(name).onSnapshot(function(snap){
-    S[key]=snap.docs.map(function(d){var o=d.data()||{};o.id=d.id;return o});
-    ui.loaded[name]=true;S.v++;schedule();
-  },function(err){ui.loaded[name]=true;ui.err=(err&&err.code)||'error';schedule()});
-}
-async function init(){
-  readHash();renderAll();
-  setTimeout(function(){if(!ready()){ui.timeout=true;renderView()}},10000);
-  setInterval(function(){renderClock();if(ready()&&ui.tab!=='pinjam')schedule()},30000);
-  var c=window.claude;
-  if(!c||typeof c.use!=='function'){ui.nodb=true;renderView();return}
-  var db=null,user=null;
-  try{db=await c.use('db')}catch(e){}
-  try{user=await c.use('user')}catch(e){}
-  try{ui.dl=await c.use('downloads')}catch(e){}
-  if(!db){ui.nodb=true;renderAll();return}
-  ui.db=db;
-  try{if(user&&typeof user.can==='function'){var cw=await user.can('data.write');ui.canWrite=cw!==false}}catch(e){}
-  sub('tools','tools');sub('students','students');sub('loans','loans');sub('adjustments','adj');
-}
-init();
+seed();readHash();renderAll();
+setInterval(function(){renderClock();if(ui.tab!=='pinjam')schedule()},30000);
 })();
 </script>
