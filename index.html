@@ -1,0 +1,790 @@
+<title>Bengkel Self-Service</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: sticky header (brand, clock, tab row) over a single content column that splits into two columns on wide screens.
+   Status colours follow the workshop rule: green = tersedia, amber = dipinjam, red = telat / rusak. */
+:root{
+  --bg:#EDF0F4; --surface:#FFFFFF; --surface2:#F3F5F9; --line:#D8DEE8; --ink:#12203A; --muted:#566782;
+  --accent:#1F4FD8; --accent-ink:#FFFFFF; --accent-soft:#E4EBFD;
+  --ok:#17794A; --ok-bg:#DFF3E7; --warn:#885705; --warn-bg:#FAEBC6; --bad:#B3261E; --bad-bg:#FADFDB;
+  --f-display:'Space Grotesk',system-ui,sans-serif;
+  --f-body:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --f-mono:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0D1422; --surface:#141D30; --surface2:#1A2640; --line:#2A3858; --ink:#E7ECF6; --muted:#97A5BE;
+    --accent:#7FA2FF; --accent-ink:#0D1422; --accent-soft:#1C2B52;
+    --ok:#5FD39A; --ok-bg:#123524; --warn:#F0C25A; --warn-bg:#3A2D0E; --bad:#FF8A80; --bad-bg:#43191A;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0D1422; --surface:#141D30; --surface2:#1A2640; --line:#2A3858; --ink:#E7ECF6; --muted:#97A5BE;
+  --accent:#7FA2FF; --accent-ink:#0D1422; --accent-soft:#1C2B52;
+  --ok:#5FD39A; --ok-bg:#123524; --warn:#F0C25A; --warn-bg:#3A2D0E; --bad:#FF8A80; --bad-bg:#43191A;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{
+  background:var(--bg); color:var(--ink); font-family:var(--f-body); font-size:15px; line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px)); padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:0 56px;
+}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.app{max-width:1120px;margin:0 auto}
+h1,h2,h3{font-family:var(--f-display);margin:0;letter-spacing:-.01em;text-wrap:balance}
+h1{font-size:28px;line-height:1.15;font-weight:700}
+h2{font-size:17px;font-weight:600}
+h3{font-size:15px;font-weight:600}
+p{margin:0}
+.muted{color:var(--muted)}
+.code{font-family:var(--f-mono);font-size:12px;letter-spacing:.02em}
+.num{font-variant-numeric:tabular-nums}
+.eyebrow{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-top:14px;border-bottom:1px solid var(--line)}
+.top-in{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:10px}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.mark{width:38px;height:38px;border-radius:10px;background:var(--ink);display:grid;place-items:center;flex:none}
+.brand b{font-family:var(--f-display);font-size:18px;display:block;line-height:1.1}
+.brand small{color:var(--muted);font-size:12px;display:block}
+.clock{text-align:right;font-variant-numeric:tabular-nums;font-size:13px;color:var(--muted);flex:none}
+.clock b{display:block;font-family:var(--f-display);font-size:20px;color:var(--ink);line-height:1.1}
+.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;margin-bottom:-1px}
+.tabs::-webkit-scrollbar{display:none}
+.tab{font:inherit;font-weight:500;color:var(--muted);background:none;border:0;border-bottom:2px solid transparent;padding:10px 14px;cursor:pointer;white-space:nowrap;display:flex;gap:6px;align-items:center}
+.tab:hover{color:var(--ink)}
+.tab[aria-current="page"]{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+.badge{font-size:11px;font-weight:700;border-radius:99px;padding:1px 7px;background:var(--bad);color:var(--bg);font-variant-numeric:tabular-nums}
+.badge.soft{background:var(--surface2);color:var(--muted);border:1px solid var(--line)}
+
+.view{padding-top:24px;display:flex;flex-direction:column;gap:20px}
+.phead{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
+.phead p{color:var(--muted);margin-top:6px;max-width:60ch}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;min-width:0}
+.card>.eyebrow+h2{margin-top:2px}
+.card-h{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid2.wide-left{grid-template-columns:1.25fr 1fr}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+@media (max-width:760px){.grid2,.grid2.wide-left{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}h1{font-size:24px}}
+
+.tile{border-radius:12px;padding:14px 16px;min-width:0}
+.tile .n{font-family:var(--f-display);font-size:38px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.tile .l{font-weight:600;margin-top:8px;font-size:14px}
+.tile .h{font-size:12px;opacity:.85}
+.tone-ok{background:var(--ok-bg);color:var(--ok)}
+.tone-warn{background:var(--warn-bg);color:var(--warn)}
+.tone-bad{background:var(--bad-bg);color:var(--bad)}
+.tone-ink{background:var(--surface2);color:var(--ink)}
+
+.pill{display:inline-flex;align-items:center;gap:6px;padding:2px 10px;border-radius:99px;font-size:12px;font-weight:600;white-space:nowrap}
+.pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.pill.plain::before{display:none}
+
+.btn{font:inherit;font-weight:600;font-size:14px;min-height:42px;padding:9px 16px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.sm{min-height:34px;padding:5px 12px;font-size:13px}
+.btn:disabled{opacity:.45;cursor:not-allowed;filter:none}
+.btn:focus-visible,.chip:focus-visible,.tab:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.chip{font:inherit;font-size:13px;font-weight:500;min-height:36px;padding:6px 14px;border-radius:99px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);font-weight:600}
+.chip:disabled{opacity:.45;cursor:not-allowed}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+
+label.f{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px}
+input[type=text],input[type=tel],input[type=search],select{font:inherit;width:100%;min-height:42px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface2);color:var(--ink)}
+.form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.form-grid .full{grid-column:1/-1}
+@media (max-width:520px){.form-grid{grid-template-columns:1fr}}
+.check{display:flex;gap:8px;align-items:center;font-size:14px}
+.check input{width:18px;height:18px;accent-color:var(--accent)}
+
+.rows{display:flex;flex-direction:column}
+.row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--line)}
+.row:first-child{border-top:0;padding-top:0}
+.row:last-child{padding-bottom:0}
+.row>div{min-width:0}
+.row .t{font-weight:600}
+.row .s{font-size:13px;color:var(--muted)}
+.empty-sm{padding:18px;border:1px dashed var(--line);border-radius:12px;color:var(--muted);text-align:center;font-size:14px}
+.empty-big{padding:40px 24px;text-align:center;display:flex;flex-direction:column;gap:12px;align-items:center}
+.empty-big p{color:var(--muted);max-width:46ch}
+
+.board{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:8px}
+.bt{border-radius:10px;padding:10px;min-width:0}
+.bt .code{display:block;font-weight:500;color:var(--ink)}
+.bt .nm{display:block;font-size:12px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:2px 0 6px}
+.bt .st{font-size:11px;font-weight:700;letter-spacing:.02em}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+
+.bars{display:flex;flex-direction:column;gap:12px}
+.bar-r{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;align-items:center;font-size:14px}
+.bar-r .tr{grid-column:1/-1;height:8px;border-radius:99px;background:var(--surface2);overflow:hidden}
+.bar-r .tr i{display:block;height:100%;border-radius:99px;background:var(--bad)}
+.bar-r .tr i.acc{background:var(--accent)}
+
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.tc{display:flex;flex-direction:column;gap:10px}
+.tc .top2{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.tc .nm{font-family:var(--f-display);font-weight:600;font-size:16px;line-height:1.25}
+.tc .meta{font-size:13px;color:var(--muted)}
+.tc .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto}
+.qrbox{background:#fff;padding:12px;border-radius:10px;border:1px solid var(--line);width:150px}
+.qrbox svg{display:block;width:100%;height:auto}
+.qrwrap{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.qrwrap p{font-size:12px;color:var(--muted);flex:1;min-width:140px}
+
+.steps{display:flex;flex-direction:column;gap:22px}
+.step{display:flex;flex-direction:column;gap:10px}
+.step-h{display:flex;align-items:center;gap:10px;font-weight:600}
+.step-h b{width:24px;height:24px;border-radius:50%;background:var(--ink);color:var(--bg);display:grid;place-items:center;font-size:12px}
+.note{border-radius:10px;padding:12px 14px;font-size:14px}
+.rule{display:grid;grid-template-columns:64px 1fr;gap:12px;align-items:baseline;padding:9px 0;border-top:1px solid var(--line);font-size:14px}
+.rule:first-of-type{border-top:0}
+.rule b{font-family:var(--f-display);font-size:17px;font-variant-numeric:tabular-nums}
+.pos{color:var(--ok)}.neg{color:var(--bad)}.zero{color:var(--muted)}
+
+.wa{background:var(--surface2);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:8px}
+.bubble{max-width:88%;padding:8px 12px;border-radius:12px;font-size:14px;overflow-wrap:anywhere}
+.bubble small{display:block;font-size:11px;color:var(--muted);margin-top:2px;text-align:right}
+.bubble.me{align-self:flex-end;background:var(--accent-soft)}
+.bubble.bot{align-self:flex-start;background:var(--surface);border:1px solid var(--line)}
+.bubble.ghost{border-style:dashed}
+
+.meter{position:relative;height:10px;border-radius:99px;background:var(--surface2);border:1px solid var(--line)}
+.meter i{display:block;height:100%;border-radius:99px;background:var(--ok)}
+.meter.low i{background:var(--bad)}
+.meter::after{content:"";position:absolute;left:70%;top:-4px;bottom:-4px;width:2px;background:var(--ink);opacity:.45}
+.score{font-family:var(--f-display);font-size:32px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+details.ev summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--accent);padding:4px 0}
+details.ev ul{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:13px}
+details.ev li{display:flex;gap:8px;justify-content:space-between}
+details.ev li span:first-child{min-width:0;overflow-wrap:anywhere}
+details.add{border:1px dashed var(--line);border-radius:14px;padding:4px 16px}
+details.add summary{cursor:pointer;font-weight:600;padding:12px 0}
+details.add form{padding-bottom:16px}
+
+.tw{overflow:auto;max-height:62vh;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:600px;font-size:13.5px;font-variant-numeric:tabular-nums}
+th{position:sticky;top:0;background:var(--surface2);text-align:left;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);padding:10px 12px;white-space:nowrap}
+td{padding:9px 12px;border-top:1px solid var(--line);vertical-align:top}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.toolbar .grow{flex:1;min-width:180px}
+
+input[type=file]{font:inherit;width:100%;padding:8px;border:1px dashed var(--line);border-radius:10px;background:var(--surface2);color:var(--ink)}
+input[type=file]::file-selector-button{font:inherit;font-weight:600;margin-right:12px;padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.banner{border-radius:12px;padding:12px 16px;font-size:14px}
+.skel{height:92px;border-radius:12px;background:var(--surface);border:1px solid var(--line);animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.55}}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:20;background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:99px;font-size:14px;font-weight:500;max-width:calc(100vw - 32px);box-shadow:0 6px 24px rgba(0,0,0,.25)}
+.toast.bad{background:var(--bad);color:var(--bg)}
+@media (prefers-reduced-motion:reduce){.skel{animation:none}*{scroll-behavior:auto!important}}
+</style>
+
+<div class="app">
+  <header class="top">
+    <div class="top-in">
+      <div class="brand">
+        <span class="mark" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 22 22"><circle cx="5" cy="11" r="3.4" fill="#4CC38A"/><circle cx="11" cy="11" r="3.4" fill="#F0B73A"/><circle cx="17" cy="11" r="3.4" fill="#F2685C"/></svg>
+        </span>
+        <div><b>Bengkel TI</b><small>Peminjaman alat self-service</small></div>
+      </div>
+      <div class="clock" id="clock" aria-hidden="true"></div>
+    </div>
+    <nav class="tabs" id="nav" aria-label="Menu utama"></nav>
+  </header>
+  <main class="view" id="view"></main>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script>
+(function(){
+'use strict';
+var $=function(s){return document.querySelector(s)};
+var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
+var MIN=60000,HR=3600000,THRESH=70,MAXS=100;
+var TABS=[['dasbor','Dasbor'],['alat','Alat'],['pinjam','Pinjam'],['kembali','Kembali'],['siswa','Siswa & skor'],['data','Data']];
+var S={tools:[],students:[],loans:[],adj:[],v:0};
+var ui={loaded:{},canWrite:true,db:null,dl:null,tab:'dasbor',pickTool:'',pickStudent:'',dur:'2',filter:'all',q:'',cond:{},qrOpen:{},dataTab:'alat',dq:'',lastMsg:null,timeout:false,busy:false,pending:false,nodb:false,err:''};
+
+/* ---------- format ---------- */
+var pad=function(n){return String(n).padStart(2,'0')};
+var MON=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+var fT=function(ms){var d=new Date(ms);return pad(d.getHours())+'.'+pad(d.getMinutes())};
+var fD=function(ms){var d=new Date(ms);return d.getDate()+' '+MON[d.getMonth()]};
+var fDT=function(ms){return fD(ms)+', '+fT(ms)};
+var fDur=function(m){m=Math.max(0,Math.round(m));var h=Math.floor(m/60),r=m%60;return h?(h+' j'+(r?' '+r+' m':'')):(r+' m')};
+var first=function(n){return String(n||'').split(' ')[0]};
+var toolNo=function(c){var n=parseInt(String(c).split('-').pop(),10);return isNaN(n)?c:n};
+var byCode=function(a,b){return a.code.localeCompare(b.code,'id',{numeric:true})};
+var sign=function(d){return d>0?'+'+d:d<0?'−'+Math.abs(d):'0'};
+var COND={baik:'Baik',rusak:'Rusak',hilang:'Hilang'};
+
+/* ---------- derived data ---------- */
+function activeLoanOf(id){return S.loans.find(function(l){return l.toolId===id&&!l.returnedAt})}
+function toolState(t,now){
+  if(t.condition==='rusak')return{k:'rusak',label:'Rusak'};
+  if(t.condition==='hilang')return{k:'hilang',label:'Hilang'};
+  var l=activeLoanOf(t.id);
+  if(l)return now>l.dueAt?{k:'telat',label:'Telat',loan:l}:{k:'dipinjam',label:'Dipinjam',loan:l};
+  return{k:'tersedia',label:'Tersedia'};
+}
+var tone=function(k){return k==='tersedia'?'ok':k==='dipinjam'?'warn':'bad'};
+function deltaFor(l,cond,at){
+  if(cond==='rusak')return{d:-50,why:'Alat rusak, wajib diperbaiki atau diganti'};
+  if(cond==='hilang')return{d:-50,why:'Alat hilang, wajib diganti'};
+  var late=(at-l.dueAt)/MIN;
+  if(late<=0)return{d:5,why:'Kembali tepat waktu'};
+  if(late>=60)return{d:-10,why:'Telat '+fDur(late)};
+  return{d:0,why:'Telat '+fDur(late)+', belum sampai 1 jam'};
+}
+var cache={k:'',m:null};
+function scores(){
+  var key=S.v+':'+Math.floor(Date.now()/MIN);
+  if(cache.k===key)return cache.m;
+  var m={},evs=[],now=Date.now();
+  S.students.forEach(function(s){m[s.nis]={score:MAXS,events:[],loans:0,late:0,bad:0}});
+  S.loans.forEach(function(l){
+    var e=m[l.nis];if(!e)return;e.loans++;
+    if(l.returnedAt){
+      var r=deltaFor(l,l.condition,l.returnedAt);
+      evs.push({nis:l.nis,at:l.returnedAt,d:r.d,why:r.why+': '+l.toolName+' '+l.toolCode});
+      if(l.condition==='rusak'||l.condition==='hilang')e.bad++;
+      if(l.returnedAt>l.dueAt)e.late++;
+    }else if(now>l.dueAt)e.late++;
+  });
+  S.adj.forEach(function(a){if(m[a.nis])evs.push({nis:a.nis,at:a.at,d:a.points,why:a.reason||'Penyesuaian skor'})});
+  evs.sort(function(a,b){return a.at-b.at}).forEach(function(ev){
+    var e=m[ev.nis];e.score=Math.max(0,Math.min(MAXS,e.score+ev.d));ev.after=e.score;e.events.push(ev);
+  });
+  cache={k:key,m:m};return m;
+}
+function eligibility(stu,tool,now){
+  if(!stu||!tool)return{ok:false,msg:'',hint:true};
+  var st=toolState(tool,now);
+  if(st.k!=='tersedia')return{ok:false,msg:tool.name+' '+tool.code+' sedang tidak tersedia ('+st.label.toLowerCase()+').'};
+  var od=S.loans.find(function(l){return l.nis===stu.nis&&!l.returnedAt&&now>l.dueAt});
+  if(od)return{ok:false,msg:first(stu.name)+' masih punya pinjaman yang telat ('+od.toolName+' '+od.toolCode+'). Kembalikan dulu.'};
+  var sc=scores()[stu.nis].score;
+  if(tool.premium&&sc<THRESH)return{ok:false,msg:'Skor '+first(stu.name)+' '+sc+', di bawah '+THRESH+'. Alat mahal belum bisa dipinjam. Bantu beres-beres bengkel untuk menaikkan skor.'};
+  return{ok:true,msg:'Skor '+sc+'. '+first(stu.name)+' boleh meminjam '+tool.name+' '+tool.code+'.'};
+}
+function durOpts(now){
+  var o=[{k:'1',label:'1 jam',at:now+HR},{k:'2',label:'2 jam',at:now+2*HR},{k:'3',label:'3 jam',at:now+3*HR}];
+  var d=new Date(now);d.setHours(15,0,0,0);
+  if(d.getTime()-now>=30*MIN)o.push({k:'sd',label:'Sampai 15.00',at:d.getTime()});
+  return o;
+}
+function dueFor(now){var o=durOpts(now);return(o.find(function(x){return x.k===ui.dur})||o[1]).at}
+
+/* ---------- small pieces ---------- */
+function pill(k,label){return '<span class="pill tone-'+tone(k)+'">'+esc(label)+'</span>'}
+function head(t,s,right){return '<div class="phead"><div><h1>'+t+'</h1><p>'+s+'</p></div>'+(right||'')+'</div>'}
+function qrSvg(text){
+  try{
+    if(typeof qrcode!=='function')return '';
+    var q=qrcode(0,'M');q.addData(text);q.make();
+    return q.createSvgTag({cellSize:4,margin:0,scalable:true});
+  }catch(e){return ''}
+}
+function emptyState(){
+  return '<div class="card empty-big"><svg width="56" height="56" viewBox="0 0 56 56" aria-hidden="true"><rect x="4" y="4" width="48" height="48" rx="12" fill="none" stroke="currentColor" stroke-opacity=".3" stroke-width="2" stroke-dasharray="5 5"/><circle cx="19" cy="28" r="5" fill="#4CC38A"/><circle cx="28" cy="28" r="5" fill="#F0B73A"/><circle cx="37" cy="28" r="5" fill="#F2685C"/></svg>'
+    +'<h2>Belum ada data bengkel</h2><p>Tambahkan alat dan daftarkan siswa. Setiap alat mendapat kode dan QR sendiri, jadi siswa bisa meminjam tanpa antre di meja PLP.</p>'
+    +'<div class="chips" style="justify-content:center"><button class="btn primary" data-act="goto" data-to="alat">Tambah alat</button><button class="btn" data-act="goto" data-to="siswa">Daftarkan siswa</button></div></div>';
+}
+var dis=function(){return ui.canWrite?'':' disabled'};
+
+/* ---------- views ---------- */
+function vDasbor(now){
+  if(!S.tools.length&&!S.students.length)return head('Dasbor','Ringkasan status alat dan peminjaman hari ini.')+emptyState();
+  var SC=scores(),c={tersedia:0,dipinjam:0,telat:0,rusak:0};
+  var states=S.tools.slice().sort(byCode).map(function(t){var st=toolState(t,now);c[st.k==='hilang'?'rusak':st.k]++;return{t:t,st:st}});
+  var act=S.loans.filter(function(l){return !l.returnedAt});
+  var od=act.filter(function(l){return now>l.dueAt}).sort(function(a,b){return a.dueAt-b.dueAt});
+  var okl=act.filter(function(l){return now<=l.dueAt}).sort(function(a,b){return a.dueAt-b.dueAt});
+  var lateTop=S.students.map(function(s){return{s:s,v:SC[s.nis]}}).filter(function(x){return x.v.late>0}).sort(function(a,b){return b.v.late-a.v.late}).slice(0,4);
+  var dmg={};S.loans.forEach(function(l){if(l.condition==='rusak'||l.condition==='hilang')dmg[l.toolId]=(dmg[l.toolId]||0)+1});
+  var dmgTop=Object.keys(dmg).map(function(id){return{t:S.tools.find(function(x){return x.id===id}),n:dmg[id]}}).filter(function(x){return x.t}).sort(function(a,b){return b.n-a.n}).slice(0,4);
+  var low=S.students.map(function(s){return{s:s,sc:SC[s.nis].score}}).sort(function(a,b){return a.sc-b.sc}).slice(0,3);
+  var total=S.tools.length;
+  function tile(k,n,l,h){return '<div class="tile tone-'+k+'"><div class="n">'+n+'</div><div class="l">'+l+'</div><div class="h">'+h+'</div></div>'}
+  var h=head('Dasbor','Status alat dan peminjaman saat ini. Halaman ini bisa dibuka kepala bengkel dari HP tanpa login.');
+  h+='<section class="stats" aria-label="Ringkasan status">'
+    +tile('ok',c.tersedia,'Tersedia','dari '+total+' alat')
+    +tile('warn',c.dipinjam,'Dipinjam','masih dalam batas waktu')
+    +tile('bad',c.telat,'Telat','perlu ditagih')
+    +tile('bad',c.rusak,'Rusak / hilang','tidak bisa dipinjam')+'</section>';
+  h+='<div class="grid2">';
+  h+='<section class="card"><div class="card-h"><h2>Perlu tindakan</h2><span class="muted num">'+od.length+' telat</span></div>';
+  h+=od.length?'<div class="rows">'+od.map(function(l){
+    return '<div class="row"><div><div class="t">'+esc(l.toolName)+' <span class="code muted">'+esc(l.toolCode)+'</span></div><div class="s">'+esc(l.studentName)+' · batas '+fT(l.dueAt)+'</div></div>'
+      +'<div style="text-align:right;display:flex;flex-direction:column;gap:6px;align-items:flex-end"><span class="pill tone-bad">Telat '+fDur((now-l.dueAt)/MIN)+'</span><button class="btn sm" data-act="goto" data-to="kembali">Terima kembali</button></div></div>';
+  }).join('')+'</div>':'<div class="empty-sm">Tidak ada keterlambatan. Semua alat yang keluar masih dalam batas waktu.</div>';
+  h+='</section>';
+  h+='<section class="card"><div class="card-h"><h2>Sedang dipinjam</h2><span class="muted num">'+okl.length+' alat</span></div>';
+  h+=okl.length?'<div class="rows">'+okl.map(function(l){
+    return '<div class="row"><div><div class="t">'+esc(l.toolName)+' <span class="code muted">'+esc(l.toolCode)+'</span></div><div class="s">'+esc(l.studentName)+' · sejak '+fT(l.borrowedAt)+'</div></div>'
+      +'<div style="text-align:right"><div class="t num">'+fT(l.dueAt)+'</div><div class="s">sisa '+fDur((l.dueAt-now)/MIN)+'</div></div></div>';
+  }).join('')+'</div>':'<div class="empty-sm">Tidak ada alat yang sedang keluar.</div>';
+  h+='</section></div>';
+  h+='<section class="card"><div class="card-h"><h2>Papan status alat</h2><div class="legend"><span><i style="background:var(--ok-bg);border:1px solid var(--ok)"></i>Tersedia</span><span><i style="background:var(--warn-bg);border:1px solid var(--warn)"></i>Dipinjam</span><span><i style="background:var(--bad-bg);border:1px solid var(--bad)"></i>Telat / rusak</span></div></div><div class="board">'
+    +states.map(function(x){return '<div class="bt tone-'+tone(x.st.k)+'"><span class="code">'+esc(x.t.code)+'</span><span class="nm">'+esc(x.t.name)+'</span><span class="st">'+esc(x.st.label.toUpperCase())+'</span></div>'}).join('')+'</div></section>';
+  h+='<div class="grid2">';
+  var maxL=lateTop.length?lateTop[0].v.late:1;
+  h+='<section class="card"><div class="card-h"><h2>Paling sering telat</h2></div>'+(lateTop.length?'<div class="bars">'+lateTop.map(function(x){
+    return '<div class="bar-r"><span>'+esc(x.s.name)+'</span><b class="num">'+x.v.late+'×</b><div class="tr"><i style="width:'+(x.v.late/maxL*100)+'%"></i></div></div>'}).join('')+'</div>':'<div class="empty-sm">Belum ada keterlambatan tercatat.</div>')+'</section>';
+  var maxD=dmgTop.length?dmgTop[0].n:1;
+  h+='<section class="card"><div class="card-h"><h2>Paling sering rusak</h2></div>'+(dmgTop.length?'<div class="bars">'+dmgTop.map(function(x){
+    return '<div class="bar-r"><span>'+esc(x.t.name)+' <span class="code muted">'+esc(x.t.code)+'</span></span><b class="num">'+x.n+'×</b><div class="tr"><i style="width:'+(x.n/maxD*100)+'%"></i></div></div>'}).join('')+'</div>':'<div class="empty-sm">Belum ada kerusakan tercatat.</div>')+'</section></div>';
+  h+='<section class="card"><div class="card-h"><h2>Skor terendah</h2><button class="btn sm" data-act="goto" data-to="siswa">Lihat semua siswa</button></div><div class="rows">'+low.map(function(x){
+    var lo=x.sc<THRESH;
+    return '<div class="row"><div><div class="t">'+esc(x.s.name)+'</div><div class="s">'+esc(x.s.kelas||'')+'</div></div><div style="display:flex;gap:10px;align-items:center"><span class="pill tone-'+(lo?'bad':'ok')+'">'+(lo?'Alat mahal dikunci':'Boleh semua alat')+'</span><b class="score" style="font-size:22px">'+x.sc+'</b></div></div>'}).join('')+'</div></section>';
+  return h;
+}
+
+function toolCard(t,st,now){
+  var l=st.loan,k=tone(st.k),a='';
+  if(st.k==='tersedia')a='<button class="btn primary sm" data-act="pick" data-id="'+esc(t.id)+'">Pinjam</button>';
+  else if(st.k==='rusak'||st.k==='hilang')a='<button class="btn sm" data-act="repair" data-id="'+esc(t.id)+'"'+dis()+'>Tandai sudah baik</button>';
+  else a='<button class="btn sm" data-act="goto" data-to="kembali">Terima kembali</button>';
+  var open=!!ui.qrOpen[t.id],qr=open?qrSvg('PINJAM '+t.code):'';
+  return '<article class="card tc"><div class="top2"><div><span class="code muted">'+esc(t.code)+'</span><div class="nm">'+esc(t.name)+'</div></div>'+pill(st.k==='hilang'?'hilang':st.k,st.label)+'</div>'
+    +'<div class="meta">'+esc(t.category||'Umum')+(t.premium?' · alat mahal, butuh skor ≥ '+THRESH:' · bebas untuk semua skor')+'</div>'
+    +(l?'<div class="meta">'+esc(l.studentName)+' · kembali '+fT(l.dueAt)+(now>l.dueAt?' ('+fDur((now-l.dueAt)/MIN)+' lewat)':'')+'</div>':'')
+    +(open?'<div class="qrwrap"><div class="qrbox">'+(qr||'<span class="code" style="color:#000">PINJAM '+esc(t.code)+'</span>')+'</div><p>Isi QR contoh: <span class="code">PINJAM '+esc(t.code)+'</span>. Untuk bot sungguhan, ganti dengan tautan wa.me ke nomor bot bengkel.</p></div>':'')
+    +'<div class="acts">'+a+'<button class="btn sm" data-act="qr" data-id="'+esc(t.id)+'" aria-pressed="'+open+'">'+(open?'Tutup QR':'QR')+'</button></div></article>';
+}
+function alatList(now){
+  var q=ui.q.trim().toLowerCase();
+  var items=S.tools.map(function(t){return{t:t,st:toolState(t,now)}}).filter(function(x){
+    var g=x.st.k==='hilang'?'rusak':x.st.k;
+    if(ui.filter!=='all'&&g!==ui.filter)return false;
+    return !q||(x.t.code+' '+x.t.name+' '+(x.t.category||'')).toLowerCase().indexOf(q)>-1;
+  }).sort(function(a,b){return byCode(a.t,b.t)});
+  if(!items.length)return '<div class="empty-sm">Tidak ada alat yang cocok dengan pencarian atau filter ini.</div>';
+  return '<div class="cards">'+items.map(function(x){return toolCard(x.t,x.st,now)}).join('')+'</div>';
+}
+function vAlat(now){
+  var f=[['all','Semua'],['tersedia','Tersedia'],['dipinjam','Dipinjam'],['telat','Telat'],['rusak','Rusak / hilang']];
+  var h=head('Alat','Setiap alat punya kode dan QR. Status diperbarui otomatis dari catatan peminjaman, bukan ditulis tangan.');
+  h+='<div class="toolbar"><div class="grow"><label class="f" for="q-alat" style="position:absolute;left:-9999px">Cari alat</label><input type="search" id="q-alat" data-keep="1" placeholder="Cari kode atau nama alat" value="'+esc(ui.q)+'" autocomplete="off"></div></div>';
+  h+='<div class="chips" role="group" aria-label="Filter status">'+f.map(function(x){return '<button class="chip" data-act="filt" data-v="'+x[0]+'" aria-pressed="'+(ui.filter===x[0])+'">'+x[1]+'</button>'}).join('')+'</div>';
+  h+='<div id="alat-list">'+alatList(now)+'</div>';
+  h+='<details class="add"><summary>Tambah alat baru</summary><form id="f-tool-new" class="form-grid"><div><label class="f" for="nt-code">Kode</label><input type="text" id="nt-code" placeholder="mis. MM-05" required maxlength="12" autocomplete="off"></div><div><label class="f" for="nt-name">Nama alat</label><input type="text" id="nt-name" placeholder="mis. Multimeter" required maxlength="40" autocomplete="off"></div><div><label class="f" for="nt-cat">Kategori</label><input type="text" id="nt-cat" placeholder="mis. Alat ukur" maxlength="30" autocomplete="off"></div><div style="display:flex;align-items:end"><label class="check"><input type="checkbox" id="nt-prem"> Alat mahal (butuh skor ≥ '+THRESH+')</label></div><div class="full"><button class="btn primary" type="submit"'+dis()+'>Simpan alat</button></div></form></details>';
+  return h;
+}
+
+function vPinjam(now){
+  var tool=S.tools.find(function(t){return t.id===ui.pickTool});
+  if(tool&&toolState(tool,now).k!=='tersedia')tool=null;
+  var avail=S.tools.filter(function(t){return toolState(t,now).k==='tersedia'}).sort(byCode);
+  var SC=scores(),stu=S.students.find(function(s){return s.nis===ui.pickStudent});
+  var el=eligibility(stu,tool,now),opts=durOpts(now);
+  if(!opts.some(function(o){return o.k===ui.dur}))ui.dur='2';
+  var due=dueFor(now);
+  var h=head('Pinjam alat','Tiga langkah, sama seperti saat siswa memindai QR di rak: pilih alat, pilih nama, tentukan batas kembali.');
+  h+='<div class="grid2 wide-left"><div class="card"><div class="steps">';
+  h+='<div class="step"><div class="step-h"><b>1</b>Pilih alat yang tersedia</div>'+(avail.length?'<div class="chips" role="group" aria-label="Alat tersedia">'+avail.map(function(t){
+    return '<button class="chip" data-act="ptool" data-id="'+esc(t.id)+'" aria-pressed="'+(tool&&tool.id===t.id)+'"><span class="code">'+esc(t.code)+'</span> '+esc(t.name)+'</button>'}).join('')+'</div>':'<div class="empty-sm">Semua alat sedang keluar atau rusak.</div>')
+    +(S.tools.length-avail.length?'<p class="muted" style="font-size:13px">'+(S.tools.length-avail.length)+' alat lain sedang dipinjam atau rusak.</p>':'')+'</div>';
+  h+='<div class="step"><div class="step-h"><b>2</b>Pilih peminjam</div><label class="f" for="f-stu" style="position:absolute;left:-9999px">Peminjam</label><select id="f-stu"><option value="">Pilih nama siswa</option>'+S.students.slice().sort(function(a,b){return a.name.localeCompare(b.name,'id')}).map(function(s){
+    return '<option value="'+esc(s.nis)+'"'+(s.nis===ui.pickStudent?' selected':'')+'>'+esc(s.name)+' · '+esc(s.nis)+' · skor '+SC[s.nis].score+'</option>'}).join('')+'</select></div>';
+  h+='<div class="step"><div class="step-h"><b>3</b>Batas kembali</div><div class="chips" role="group" aria-label="Lama peminjaman">'+opts.map(function(o){
+    return '<button class="chip" data-act="dur" data-v="'+o.k+'" aria-pressed="'+(ui.dur===o.k)+'">'+o.label+'</button>'}).join('')+'</div><p class="muted" style="font-size:13px">Wajib kembali jam <b class="num" style="color:var(--ink)">'+fT(due)+'</b>. Bot mengingatkan 30 menit sebelumnya.</p></div>';
+  h+='<div>'+(el.hint?'<div class="note tone-ink">Pilih alat dan peminjam untuk melihat apakah pinjaman bisa dicatat.</div>':'<div class="note tone-'+(el.ok?'ok':'bad')+'" role="status">'+esc(el.msg)+'</div>')+'</div>';
+  h+='<div><button class="btn primary" data-act="borrow"'+((el.ok&&ui.canWrite&&!ui.busy)?'':' disabled')+'>Catat peminjaman</button></div>';
+  h+='</div></div>';
+  h+='<div style="display:flex;flex-direction:column;gap:16px;min-width:0"><div class="card"><div class="card-h"><h2>Aturan skor kepercayaan</h2></div>'
+    +'<div class="rule"><b class="pos">+5</b><span>Kembali tepat waktu</span></div>'
+    +'<div class="rule"><b class="zero">0</b><span>Telat kurang dari 1 jam (tercatat, belum mengurangi skor)</span></div>'
+    +'<div class="rule"><b class="neg">−10</b><span>Telat 1 jam atau lebih</span></div>'
+    +'<div class="rule"><b class="neg">−50</b><span>Alat rusak atau hilang, wajib diganti</span></div>'
+    +'<div class="rule"><b class="pos">+10</b><span>Tugas pemulihan, mis. membantu beres-beres bengkel (dicatat PLP)</span></div>'
+    +'<p class="muted" style="font-size:13px;margin-top:10px">Skor awal dan maksimum '+MAXS+'. Di bawah '+THRESH+', siswa hanya bisa meminjam alat yang tidak ditandai mahal. Siswa dengan pinjaman telat tidak bisa meminjam lagi sampai alatnya kembali.</p></div>';
+  if(ui.lastMsg){
+    var m=ui.lastMsg;
+    h+='<div class="card"><div class="card-h"><h2>Pratinjau WhatsApp</h2><span class="muted" style="font-size:12px">simulasi, belum terkirim</span></div><div class="wa">'
+      +'<div class="bubble me">PINJAM '+esc(m.code)+'<small>'+fT(m.at)+'</small></div>'
+      +'<div class="bubble bot">'+esc(m.text)+'<small>'+fT(m.at)+'</small></div>'
+      +'<div class="bubble bot ghost">'+esc(m.remind)+'<small>contoh pengingat, jam '+fT(m.dueAt-30*MIN)+'</small></div></div></div>';
+  }
+  h+='</div></div>';
+  return h;
+}
+
+function predText(l,c,now){var r=deltaFor(l,c,now);return 'Skor '+first(l.studentName)+': <b class="'+(r.d>0?'pos':r.d<0?'neg':'zero')+'">'+sign(r.d)+'</b> · '+esc(r.why)}
+function vKembali(now){
+  var act=S.loans.filter(function(l){return !l.returnedAt}).sort(function(a,b){return a.dueAt-b.dueAt});
+  var h=head('Kembali','PLP tidak mencatat, hanya memeriksa. Pilih kondisi alat, lalu konfirmasi. Skor siswa dihitung otomatis.');
+  h+=act.length?'<div class="cards">'+act.map(function(l){
+    var late=now>l.dueAt,c=ui.cond[l.id]||'baik';
+    return '<article class="card tc"><div class="top2"><div><span class="code muted">'+esc(l.toolCode)+'</span><div class="nm">'+esc(l.toolName)+'</div></div>'+(late?'<span class="pill tone-bad">Telat '+fDur((now-l.dueAt)/MIN)+'</span>':'<span class="pill tone-warn">Dipinjam</span>')+'</div>'
+      +'<div class="meta">'+esc(l.studentName)+' · pinjam '+fT(l.borrowedAt)+' · batas '+fT(l.dueAt)+'</div>'
+      +'<div><div class="eyebrow" style="margin-bottom:6px">Kondisi alat</div><div class="chips" role="group" aria-label="Kondisi alat">'+['baik','rusak','hilang'].map(function(k){return '<button class="chip" data-act="cond" data-id="'+esc(l.id)+'" data-v="'+k+'" aria-pressed="'+(c===k)+'">'+COND[k]+'</button>'}).join('')+'</div></div>'
+      +'<div class="meta" id="pred-'+esc(l.id)+'">'+predText(l,c,now)+'</div>'
+      +'<div class="acts"><button class="btn primary sm" data-act="return" data-id="'+esc(l.id)+'"'+dis()+'>Konfirmasi pengembalian</button></div></article>';
+  }).join('')+'</div>':'<div class="empty-sm">Tidak ada alat yang sedang dipinjam.</div>';
+  var done=S.loans.filter(function(l){return l.returnedAt}).sort(function(a,b){return b.returnedAt-a.returnedAt}).slice(0,8);
+  if(done.length){
+    h+='<section class="card"><div class="card-h"><h2>Pengembalian terakhir</h2></div><div class="tw" style="max-height:none"><table><thead><tr><th>Kembali</th><th>Alat</th><th>Peminjam</th><th>Kondisi</th><th>Skor</th></tr></thead><tbody>'
+      +done.map(function(l){var r=deltaFor(l,l.condition,l.returnedAt);return '<tr><td>'+fDT(l.returnedAt)+'</td><td>'+esc(l.toolName)+' <span class="code muted">'+esc(l.toolCode)+'</span></td><td>'+esc(l.studentName)+'</td><td>'+esc(COND[l.condition]||'-')+'</td><td><b class="'+(r.d>0?'pos':r.d<0?'neg':'zero')+'">'+sign(r.d)+'</b></td></tr>'}).join('')+'</tbody></table></div></section>';
+  }
+  return h;
+}
+
+function vSiswa(now){
+  var SC=scores();
+  var list=S.students.slice().sort(function(a,b){return SC[b.nis].score-SC[a.nis].score||a.name.localeCompare(b.name,'id')});
+  var h=head('Siswa & skor','Skor kepercayaan menggantikan denda uang. Di bawah '+THRESH+', alat mahal terkunci sampai skor naik lagi.');
+  h+=list.length?'<div class="cards">'+list.map(function(s){
+    var v=SC[s.nis],lo=v.score<THRESH;
+    var ev=v.events.slice(-6).reverse();
+    return '<article class="card tc"><div class="top2"><div><div class="nm">'+esc(s.name)+'</div><div class="meta">'+esc(s.kelas||'')+' · NIS <span class="num">'+esc(s.nis)+'</span></div><div class="meta code">'+esc(s.wa||'')+'</div></div><div class="score">'+v.score+'</div></div>'
+      +'<div><div class="meter'+(lo?' low':'')+'" role="img" aria-label="Skor '+v.score+' dari '+MAXS+', batas '+THRESH+'"><i style="width:'+v.score+'%"></i></div><div style="display:flex;justify-content:space-between;margin-top:6px;font-size:12px" class="muted"><span>0</span><span>batas '+THRESH+'</span><span>'+MAXS+'</span></div></div>'
+      +'<div><span class="pill tone-'+(lo?'bad':'ok')+'">'+(lo?'Hanya alat non-mahal':'Boleh semua alat')+'</span></div>'
+      +'<div class="meta">'+v.loans+' pinjam · '+v.late+' telat · '+v.bad+' rusak/hilang</div>'
+      +(ev.length?'<details class="ev"><summary>Riwayat skor</summary><ul>'+ev.map(function(e){return '<li><span>'+fD(e.at)+' · '+esc(e.why)+'</span><b class="num '+(e.d>0?'pos':e.d<0?'neg':'zero')+'">'+sign(e.d)+' → '+e.after+'</b></li>'}).join('')+'</ul></details>':'')
+      +'<div class="acts"><button class="btn sm" data-act="recover" data-id="'+esc(s.nis)+'"'+((v.score>=MAXS||!ui.canWrite)?' disabled':'')+'>Tugas pemulihan +10</button></div></article>';
+  }).join('')+'</div>':emptyState();
+  h+='<details class="add"><summary>Daftarkan siswa baru</summary><form id="f-stu-new" class="form-grid"><div><label class="f" for="ns-nis">NIS</label><input type="text" id="ns-nis" required maxlength="20" autocomplete="off" inputmode="numeric"></div><div><label class="f" for="ns-name">Nama lengkap</label><input type="text" id="ns-name" required maxlength="60" autocomplete="off"></div><div><label class="f" for="ns-kelas">Kelas</label><input type="text" id="ns-kelas" placeholder="mis. XI TKJ 1" maxlength="20" autocomplete="off"></div><div><label class="f" for="ns-wa">Nomor WhatsApp</label><input type="tel" id="ns-wa" placeholder="mis. 62812xxxxxxx" maxlength="20" autocomplete="off"></div><div class="full"><p class="muted" style="font-size:13px;margin-bottom:10px">Pendaftaran satu kali ini memetakan nomor WhatsApp ke NIS, supaya skor melekat ke satu siswa.</p><button class="btn primary" type="submit"'+dis()+'>Simpan siswa</button></div></form></details>';
+  return h;
+}
+
+function dataset(tab,now){
+  var SC=scores();
+  if(tab==='alat')return{head:['Kode','Nama','Kategori','Alat mahal','Kondisi','Status'],rows:S.tools.slice().sort(byCode).map(function(t){return[t.code,t.name,t.category||'',t.premium?'Ya':'Tidak',COND[t.condition||'baik'],toolState(t,now).label]})};
+  if(tab==='siswa')return{head:['NIS','Nama','Kelas','WhatsApp','Skor'],rows:S.students.slice().sort(function(a,b){return a.nis.localeCompare(b.nis)}).map(function(s){return[s.nis,s.name,s.kelas||'',s.wa||'',SC[s.nis].score]})};
+  if(tab==='pinjam')return{head:['Pinjam','Alat','Peminjam','Batas','Kembali','Kondisi','Selisih menit'],rows:S.loans.slice().sort(function(a,b){return b.borrowedAt-a.borrowedAt}).map(function(l){return[fDT(l.borrowedAt),l.toolName+' '+l.toolCode,l.studentName,fDT(l.dueAt),l.returnedAt?fDT(l.returnedAt):'belum',l.condition?COND[l.condition]:'',l.returnedAt?Math.round((l.returnedAt-l.dueAt)/MIN):Math.round((now-l.dueAt)/MIN)]})};
+  var rows=[];
+  S.students.forEach(function(s){SC[s.nis].events.forEach(function(e){rows.push({at:e.at,r:[fDT(e.at),s.name,e.d,e.why,e.after]})})});
+  rows.sort(function(a,b){return b.at-a.at});
+  return{head:['Waktu','Siswa','Perubahan','Alasan','Skor akhir'],rows:rows.map(function(x){return x.r})};
+}
+function dataTable(now){
+  var d=dataset(ui.dataTab,now),q=ui.dq.trim().toLowerCase();
+  var rows=q?d.rows.filter(function(r){return r.join(' ').toLowerCase().indexOf(q)>-1}):d.rows;
+  if(!rows.length)return '<div class="empty-sm">Tidak ada baris yang cocok.</div>';
+  return '<div class="tw"><table><thead><tr>'+d.head.map(function(x){return '<th scope="col">'+x+'</th>'}).join('')+'</tr></thead><tbody>'
+    +rows.map(function(r){return '<tr>'+r.map(function(c){return '<td>'+esc(c)+'</td>'}).join('')+'</tr>'}).join('')+'</tbody></table></div><p class="muted" style="font-size:13px">'+rows.length+' baris</p>';
+}
+function vData(now){
+  var t=[['alat','Alat'],['siswa','Siswa'],['pinjam','Peminjaman'],['skor','Riwayat skor']];
+  var h=head('Data','Semua catatan tersimpan sebagai tabel dan dibagikan ke setiap orang yang membuka halaman ini. Unduh sebagai CSV untuk dibuka di Excel atau Google Sheets.',
+    '<button class="btn" data-act="export"'+(ui.dl?'':' disabled')+'>Unduh CSV</button>');
+  h+='<div class="chips" role="group" aria-label="Tabel data">'+t.map(function(x){return '<button class="chip" data-act="dtab" data-v="'+x[0]+'" aria-pressed="'+(ui.dataTab===x[0])+'">'+x[1]+'</button>'}).join('')+'</div>';
+  h+='<div class="toolbar"><div class="grow"><label class="f" for="q-data" style="position:absolute;left:-9999px">Cari di tabel</label><input type="search" id="q-data" data-keep="1" placeholder="Cari di tabel ini" value="'+esc(ui.dq)+'" autocomplete="off"></div></div>';
+  h+='<div id="data-list" style="display:flex;flex-direction:column;gap:10px">'+dataTable(now)+'</div>';
+  h+=importCard();
+  return h;
+}
+
+/* ---------- impor CSV ---------- */
+function normKey(s){return String(s==null?'':s).toLowerCase().replace(/[^a-z0-9]/g,'')}
+function parseCSV(text){
+  text=String(text).replace(/^﻿/,'');
+  var firstLine=text.split(/\r?\n/)[0]||'';
+  var delim=firstLine.split(';').length>firstLine.split(',').length?';':',';
+  var rows=[],row=[],cur='',q=false;
+  for(var i=0;i<text.length;i++){
+    var c=text[i];
+    if(q){
+      if(c==='"'){if(text[i+1]==='"'){cur+='"';i++}else q=false}
+      else cur+=c;
+    }else if(c==='"')q=true;
+    else if(c===delim){row.push(cur);cur=''}
+    else if(c==='\n'||c==='\r'){if(c==='\r'&&text[i+1]==='\n')i++;row.push(cur);rows.push(row);row=[];cur=''}
+    else cur+=c;
+  }
+  if(cur!==''||row.length){row.push(cur);rows.push(row)}
+  return rows.filter(function(r){return r.some(function(x){return String(x).trim()!==''})});
+}
+function buildImport(table,rows){
+  if(rows.length-1>300)return{error:'Maksimal 300 baris per impor. File ini berisi '+(rows.length-1)+' baris.'};
+  var hdr=rows[0].map(normKey);
+  var idx=function(names){for(var i=0;i<names.length;i++){var j=hdr.indexOf(names[i]);if(j>-1)return j}return -1};
+  var cell=function(r,i){return i<0?null:String(r[i]==null?'':r[i]).trim().replace(/^'(?=[=+\-@])/,'')};
+  var items=[],seen={};
+  if(table==='alat'){
+    var iC=idx(['kode']),iN=idx(['nama','namaalat']),iK=idx(['kategori']),iM=idx(['alatmahal','mahal','premium']),iD=idx(['kondisi']);
+    if(iC<0||iN<0)return{error:'Baris pertama harus berisi kolom Kode dan Nama. Unduh templat untuk contoh formatnya.'};
+    rows.slice(1).forEach(function(r,n){
+      var code=(cell(r,iC)||'').toUpperCase().slice(0,12),name=(cell(r,iN)||'').slice(0,40),id=code.toLowerCase().replace(/[^a-z0-9-]/g,'');
+      var it={line:n+2,key:id,id:code||'-',name:name,kind:'skip',msg:''};
+      var ex=S.tools.find(function(t){return t.id===id});
+      var cond=iD>-1?(cell(r,iD)||'').toLowerCase():'';
+      var mv=iM>-1?(cell(r,iM)||'').toLowerCase():'';
+      if(!id||!name)it.msg='Kode atau nama kosong';
+      else if(seen[id])it.msg='Kode ganda di dalam file';
+      else if(cond&&!COND[cond])it.msg='Kondisi harus Baik, Rusak, atau Hilang';
+      else if(mv&&!/^(ya|y|yes|true|1|tidak|t|no|false|0)$/.test(mv))it.msg='Alat mahal harus Ya atau Tidak';
+      else{
+        seen[id]=1;
+        var prem=mv?/^(ya|y|yes|true|1)$/.test(mv):(ex?!!ex.premium:false);
+        it.data={code:code,name:name,category:(iK>-1&&cell(r,iK))?cell(r,iK).slice(0,30):(ex?ex.category||'':''),premium:prem,condition:cond||(ex&&ex.condition)||'baik'};
+        it.kind=ex?'update':'new';
+      }
+      items.push(it);
+    });
+  }else{
+    var iS=idx(['nis']),iN2=idx(['nama','namalengkap']),iL=idx(['kelas']),iW=idx(['whatsapp','wa','nomorwa','nomorwhatsapp','hp']);
+    if(iS<0||iN2<0)return{error:'Baris pertama harus berisi kolom NIS dan Nama. Unduh templat untuk contoh formatnya.'};
+    rows.slice(1).forEach(function(r,n){
+      var nis=(cell(r,iS)||'').replace(/[^A-Za-z0-9_-]/g,'').slice(0,20),name=(cell(r,iN2)||'').slice(0,60);
+      var it={line:n+2,key:nis,id:nis||'-',name:name,kind:'skip',msg:''};
+      var ex=S.students.find(function(s){return s.nis===nis});
+      if(!nis||!name)it.msg='NIS atau nama kosong';
+      else if(seen[nis])it.msg='NIS ganda di dalam file';
+      else{
+        seen[nis]=1;
+        it.data={nis:nis,name:name,kelas:(iL>-1&&cell(r,iL))?cell(r,iL).slice(0,20):(ex?ex.kelas||'':''),wa:(iW>-1&&cell(r,iW))?cell(r,iW).slice(0,20):(ex?ex.wa||'':'')};
+        it.kind=ex?'update':'new';
+      }
+      items.push(it);
+    });
+  }
+  return{items:items};
+}
+function impPreview(){
+  var m=ui.imp;if(!m)return '';
+  if(m.error)return '<div class="banner tone-bad" role="alert">'+esc(m.error)+'</div>';
+  var nNew=0,nUp=0,nSkip=0;
+  m.items.forEach(function(i){if(i.kind==='new')nNew++;else if(i.kind==='update')nUp++;else nSkip++});
+  var shown=m.items.slice(0,50),n=nNew+nUp;
+  var label=m.table==='alat'?'Kode':'NIS';
+  var h='<div class="banner tone-ink"><b>'+esc(m.name)+'</b>: '+nNew+' baru, '+nUp+' diperbarui, '+nSkip+' dilewati.</div>';
+  h+='<div class="tw" style="max-height:320px"><table><thead><tr><th>Baris</th><th>'+label+'</th><th>Nama</th><th>Hasil</th></tr></thead><tbody>'+shown.map(function(i){
+    var r=i.kind==='new'?'<span class="pill tone-ok">Baru</span>':i.kind==='update'?'<span class="pill tone-warn">Perbarui</span>':'<span class="pill tone-bad">Dilewati</span> '+esc(i.msg);
+    return '<tr><td>'+i.line+'</td><td class="code">'+esc(i.id)+'</td><td>'+esc(i.name)+'</td><td>'+r+'</td></tr>';
+  }).join('')+'</tbody></table></div>';
+  if(m.items.length>50)h+='<p class="muted" style="font-size:13px">Menampilkan 50 dari '+m.items.length+' baris. Semua baris valid tetap diimpor.</p>';
+  if(ui.busy&&ui.impProg)h+='<div class="banner tone-warn" role="status">'+esc(ui.impProg)+'</div>';
+  h+='<div class="chips"><button class="btn primary" data-act="imp-run"'+((n&&ui.canWrite&&!ui.busy)?'':' disabled')+'>Impor '+n+' baris</button><button class="btn" data-act="imp-clear"'+(ui.busy?' disabled':'')+'>Batal</button></div>';
+  return h;
+}
+function refreshImp(){var b=$('#imp-box');if(b)b.innerHTML=impPreview()}
+function importCard(){
+  var t=ui.dataTab;
+  if(t!=='alat'&&t!=='siswa')return '<section class="card"><h2>Impor CSV</h2><p class="muted" style="margin-top:6px">Impor tersedia untuk tabel Alat dan Siswa. Data peminjaman dan riwayat skor dihitung otomatis dari aktivitas di aplikasi, jadi tidak diimpor.</p></section>';
+  var cols=t==='alat'?'Kode, Nama, Kategori, Alat mahal (Ya/Tidak), Kondisi (Baik/Rusak/Hilang)':'NIS, Nama, Kelas, WhatsApp';
+  var extra=t==='alat'?'Kolom Status boleh ada tetapi diabaikan, karena status dihitung dari data peminjaman. Kode yang sudah ada akan diperbarui.':'NIS yang sudah ada akan diperbarui. Skor siswa tidak berubah.';
+  return '<section class="card"><div class="card-h"><h2>Impor dari CSV</h2><button class="btn sm" data-act="tpl"'+(ui.dl?'':' disabled')+'>Unduh templat</button></div>'
+    +'<p class="muted" style="font-size:14px;margin-bottom:12px">Kolom: '+cols+'. '+extra+' Pemisah koma atau titik koma, maksimal 300 baris.</p>'
+    +'<div style="margin-bottom:12px"><label class="f" for="f-csv">Pilih file CSV</label><input type="file" id="f-csv" accept=".csv,text/csv"'+(ui.canWrite?'':' disabled')+'></div>'
+    +'<div id="imp-box" style="display:flex;flex-direction:column;gap:12px">'+impPreview()+'</div></section>';
+}
+async function onFile(f){
+  if(!f)return;
+  if(f.size>1048576){ui.imp={error:'File terlalu besar. Batas 1 MB.'};refreshImp();return}
+  try{
+    var rows=parseCSV(await f.text());
+    if(rows.length<2)ui.imp={error:'File kosong atau hanya berisi baris header.'};
+    else ui.imp=Object.assign({table:ui.dataTab,name:f.name},buildImport(ui.dataTab,rows));
+  }catch(e){ui.imp={error:'File tidak bisa dibaca. Pastikan formatnya CSV.'}}
+  refreshImp();
+}
+async function runImport(){
+  var m=ui.imp;if(!m||!m.items||!ui.db||ui.busy)return;
+  var todo=m.items.filter(function(i){return i.data}),coll=m.table==='alat'?'tools':'students',ok=0,fail='';
+  ui.busy=true;ui.impProg='Mengimpor 0 dari '+todo.length+'…';refreshImp();
+  for(var i=0;i<todo.length;i++){
+    try{await ui.db.collection(coll).doc(todo[i].key).set(todo[i].data);ok++;ui.impProg='Mengimpor '+ok+' dari '+todo.length+'…';refreshImp()}
+    catch(e){fail=emsg(e);break}
+  }
+  ui.busy=false;ui.impProg='';
+  if(fail){toast(ok+' baris masuk, lalu berhenti: '+fail,true);refreshImp()}
+  else{ui.imp=null;toast(ok+' baris berhasil diimpor');renderAll()}
+}
+async function doTemplate(){
+  if(!ui.dl)return;
+  var alat=ui.dataTab==='alat';
+  var text=alat?'Kode,Nama,Kategori,Alat mahal,Kondisi\r\nMM-05,Multimeter,Alat ukur,Ya,Baik\r\nTC-05,Tang Crimping,Alat jaringan,Tidak,Baik\r\n':'NIS,Nama,Kelas,WhatsApp\r\n2024009,Contoh Siswa,XI TKJ 1,6281200000009\r\n';
+  try{await ui.dl.save({filename:alat?'templat-alat.csv':'templat-siswa.csv',data:text});toast('Templat disimpan')}
+  catch(e){if(!e||e.code!=='declined')toast('File tidak bisa disimpan di tampilan ini',true)}
+}
+
+/* ---------- render ---------- */
+function ready(){return ui.loaded.tools&&ui.loaded.students&&ui.loaded.loans}
+function renderNav(){
+  var now=Date.now(),od=S.loans.filter(function(l){return !l.returnedAt&&now>l.dueAt}).length,act=S.loans.filter(function(l){return !l.returnedAt}).length;
+  $('#nav').innerHTML=TABS.map(function(t){
+    var b=t[0]==='kembali'&&ready()&&act?'<span class="badge'+(od?'':' soft')+'">'+(od||act)+'</span>':'';
+    return '<button class="tab" data-act="nav" data-to="'+t[0]+'"'+(ui.tab===t[0]?' aria-current="page"':'')+'>'+t[1]+b+'</button>';
+  }).join('');
+}
+function renderClock(){
+  var d=new Date(),days=['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+  $('#clock').innerHTML='<b>'+fT(d.getTime())+'</b>'+days[d.getDay()]+', '+fD(d.getTime());
+}
+function renderView(){
+  var now=Date.now(),h='';
+  if(ui.nodb)h='<div class="banner tone-warn" role="alert">Penyimpanan data tidak tersedia di tampilan ini. Buka halaman ini langsung di Claude agar data peminjaman bisa dimuat.</div>';
+  else if(!ready()){
+    h=head('Memuat data','Mengambil catatan alat, siswa, dan peminjaman.')+'<div class="skel"></div><div class="skel"></div><div class="skel"></div>';
+    if(ui.timeout)h+='<div class="banner tone-warn" role="status">Data belum bisa dijangkau. Periksa koneksi internet; halaman akan terisi sendiri begitu data tiba.</div>';
+    if(ui.err)h+='<div class="banner tone-bad" role="alert">Data tidak bisa dibaca ('+esc(ui.err)+').</div>';
+  }else{
+    if(!ui.canWrite)h+='<div class="banner tone-warn">Anda bisa melihat data, tetapi tidak bisa mengubahnya.</div>';
+    h+={dasbor:vDasbor,alat:vAlat,pinjam:vPinjam,kembali:vKembali,siswa:vSiswa,data:vData}[ui.tab](now);
+  }
+  $('#view').innerHTML=h;
+}
+function renderAll(){renderNav();renderClock();renderView()}
+var raf=0;
+function schedule(){
+  if(raf)return;
+  raf=requestAnimationFrame(function(){
+    raf=0;var a=document.activeElement;
+    if(a&&$('#view').contains(a)&&a.matches('input:not([type=radio]):not([type=checkbox]),textarea')){ui.pending=true;return}
+    renderAll();
+  });
+}
+document.addEventListener('focusout',function(){if(ui.pending){ui.pending=false;setTimeout(schedule,0)}});
+
+var tt;
+function toast(m,bad){var el=$('#toast');el.textContent=m;el.className='toast'+(bad?' bad':'');el.hidden=false;clearTimeout(tt);tt=setTimeout(function(){el.hidden=true},3400)}
+var emsg=function(e){return e&&e.code==='invalid_argument'?'Anda tidak punya izin mengubah data di halaman ini.':(e&&e.message)||'Coba lagi sebentar lagi.'};
+
+/* ---------- actions ---------- */
+function go(tab){
+  if(location.hash==='#'+tab){ui.tab=tab;renderAll();window.scrollTo(0,0)}else location.hash=tab;
+}
+async function doBorrow(){
+  var now=Date.now(),t=S.tools.find(function(x){return x.id===ui.pickTool}),s=S.students.find(function(x){return x.nis===ui.pickStudent});
+  var el=eligibility(s,t,now);if(!el.ok||ui.busy||!ui.db)return;
+  var due=dueFor(now);ui.busy=true;renderView();
+  try{
+    await ui.db.collection('loans').add({toolId:t.id,toolCode:t.code,toolName:t.name,nis:s.nis,studentName:s.name,borrowedAt:now,dueAt:due,returnedAt:null,condition:null});
+    ui.lastMsg={code:t.code,at:now,dueAt:due,
+      text:t.name+' No. '+toolNo(t.code)+' berhasil dipinjam atas nama '+first(s.name)+', wajib kembali jam '+fT(due)+'.',
+      remind:first(s.name)+', 30 menit lagi '+t.name+' harus kembali. Kalau telat, skor kamu turun.'};
+    ui.pickTool='';toast('Peminjaman dicatat');
+  }catch(e){toast('Gagal mencatat: '+emsg(e),true)}
+  ui.busy=false;renderAll();
+}
+async function doReturn(id){
+  var l=S.loans.find(function(x){return x.id===id});if(!l||l.returnedAt||ui.busy||!ui.db)return;
+  var c=ui.cond[id]||'baik',now=Date.now();ui.busy=true;
+  try{
+    await ui.db.collection('loans').doc(id).update({returnedAt:now,condition:c});
+    if(c!=='baik')await ui.db.collection('tools').doc(l.toolId).update({condition:c});
+    delete ui.cond[id];toast(l.toolName+' '+l.toolCode+' diterima kembali');
+  }catch(e){toast('Gagal menyimpan: '+emsg(e),true)}
+  ui.busy=false;renderAll();
+}
+async function doRepair(id){
+  try{await ui.db.collection('tools').doc(id).update({condition:'baik'});toast('Alat ditandai sudah baik')}catch(e){toast('Gagal menyimpan: '+emsg(e),true)}
+}
+async function doRecover(nis){
+  try{await ui.db.collection('adjustments').add({nis:nis,points:10,reason:'Tugas pemulihan: membantu beres-beres bengkel',at:Date.now()});toast('Skor bertambah 10 poin')}catch(e){toast('Gagal menyimpan: '+emsg(e),true)}
+}
+async function addTool(f){
+  var code=f.querySelector('#nt-code').value.trim().toUpperCase(),name=f.querySelector('#nt-name').value.trim();
+  var id=code.toLowerCase().replace(/[^a-z0-9-]/g,'');
+  if(!id||!name){toast('Isi kode dan nama alat',true);return}
+  if(S.tools.some(function(t){return t.id===id})){toast('Kode '+code+' sudah dipakai',true);return}
+  try{
+    await ui.db.collection('tools').doc(id).set({code:code,name:name,category:f.querySelector('#nt-cat').value.trim(),premium:f.querySelector('#nt-prem').checked,condition:'baik'});
+    toast('Alat '+code+' ditambahkan');f.reset();
+  }catch(e){toast('Gagal menyimpan: '+emsg(e),true)}
+}
+async function addStudent(f){
+  var nis=f.querySelector('#ns-nis').value.trim().replace(/[^A-Za-z0-9_-]/g,''),name=f.querySelector('#ns-name').value.trim();
+  if(!nis||!name){toast('Isi NIS dan nama siswa',true);return}
+  if(S.students.some(function(s){return s.nis===nis})){toast('NIS '+nis+' sudah terdaftar',true);return}
+  try{
+    await ui.db.collection('students').doc(nis).set({nis:nis,name:name,kelas:f.querySelector('#ns-kelas').value.trim(),wa:f.querySelector('#ns-wa').value.trim()});
+    toast(first(name)+' terdaftar dengan skor '+MAXS);f.reset();
+  }catch(e){toast('Gagal menyimpan: '+emsg(e),true)}
+}
+var csvCell=function(c){if(typeof c==='string'&&/^[=+\-@\t\r]/.test(c))c="'"+c;c=String(c==null?'':c);return /[",\n;]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c};
+async function doExport(){
+  if(!ui.dl)return;
+  var d=dataset(ui.dataTab,Date.now());
+  var text='﻿'+[d.head].concat(d.rows).map(function(r){return r.map(csvCell).join(',')}).join('\r\n');
+  try{await ui.dl.save({filename:'bengkel-'+ui.dataTab+'.csv',data:text});toast('File CSV disimpan')}
+  catch(e){if(!e||e.code!=='declined')toast('File tidak bisa disimpan di tampilan ini',true)}
+}
+
+document.addEventListener('click',function(e){
+  var b=e.target.closest('[data-act]');if(!b||b.disabled)return;
+  var a=b.dataset.act,id=b.dataset.id,v=b.dataset.v;
+  if(a==='nav'||a==='goto')go(b.dataset.to);
+  else if(a==='pick'){ui.pickTool=id;go('pinjam')}
+  else if(a==='ptool'){ui.pickTool=ui.pickTool===id?'':id;renderView()}
+  else if(a==='dur'){ui.dur=v;renderView()}
+  else if(a==='borrow')doBorrow();
+  else if(a==='filt'){ui.filter=v;renderView()}
+  else if(a==='qr'){ui.qrOpen[id]=!ui.qrOpen[id];renderView()}
+  else if(a==='repair')doRepair(id);
+  else if(a==='recover')doRecover(id);
+  else if(a==='return')doReturn(id);
+  else if(a==='cond'){
+    ui.cond[id]=v;
+    var card=b.closest('article');
+    card.querySelectorAll('[data-act="cond"]').forEach(function(x){x.setAttribute('aria-pressed',String(x.dataset.v===v))});
+    var l=S.loans.find(function(x){return x.id===id});
+    if(l){var p=card.querySelector('#pred-'+CSS.escape(id));if(p)p.innerHTML=predText(l,v,Date.now())}
+  }
+  else if(a==='dtab'){ui.dataTab=v;ui.dq='';ui.imp=null;renderView()}
+  else if(a==='export')doExport();
+  else if(a==='tpl')doTemplate();
+  else if(a==='imp-run')runImport();
+  else if(a==='imp-clear'){ui.imp=null;var fi=$('#f-csv');if(fi)fi.value='';refreshImp()}
+});
+document.addEventListener('change',function(e){
+  if(e.target.id==='f-stu'){ui.pickStudent=e.target.value;renderView()}
+  else if(e.target.id==='f-csv')onFile(e.target.files&&e.target.files[0]);
+});
+document.addEventListener('input',function(e){
+  if(e.target.id==='q-alat'){ui.q=e.target.value;$('#alat-list').innerHTML=alatList(Date.now())}
+  else if(e.target.id==='q-data'){ui.dq=e.target.value;$('#data-list').innerHTML=dataTable(Date.now())}
+});
+document.addEventListener('submit',function(e){
+  e.preventDefault();
+  if(!ui.db||!ui.canWrite)return;
+  if(e.target.id==='f-tool-new')addTool(e.target);
+  else if(e.target.id==='f-stu-new')addStudent(e.target);
+});
+function readHash(){
+  var h=location.hash.replace('#','');
+  var t=TABS.some(function(x){return x[0]===h})?h:'dasbor';
+  if(ui.tab==='pinjam'&&t!=='pinjam')ui.lastMsg=null;
+  ui.tab=t;
+}
+window.addEventListener('hashchange',function(){readHash();renderAll();window.scrollTo(0,0)});
+
+/* ---------- boot ---------- */
+function sub(name,key){
+  return ui.db.collection(name).onSnapshot(function(snap){
+    S[key]=snap.docs.map(function(d){var o=d.data()||{};o.id=d.id;return o});
+    ui.loaded[name]=true;S.v++;schedule();
+  },function(err){ui.loaded[name]=true;ui.err=(err&&err.code)||'error';schedule()});
+}
+async function init(){
+  readHash();renderAll();
+  setTimeout(function(){if(!ready()){ui.timeout=true;renderView()}},10000);
+  setInterval(function(){renderClock();if(ready()&&ui.tab!=='pinjam')schedule()},30000);
+  var c=window.claude;
+  if(!c||typeof c.use!=='function'){ui.nodb=true;renderView();return}
+  var db=null,user=null;
+  try{db=await c.use('db')}catch(e){}
+  try{user=await c.use('user')}catch(e){}
+  try{ui.dl=await c.use('downloads')}catch(e){}
+  if(!db){ui.nodb=true;renderAll();return}
+  ui.db=db;
+  try{if(user&&typeof user.can==='function'){var cw=await user.can('data.write');ui.canWrite=cw!==false}}catch(e){}
+  sub('tools','tools');sub('students','students');sub('loans','loans');sub('adjustments','adj');
+}
+init();
+})();
+</script>
